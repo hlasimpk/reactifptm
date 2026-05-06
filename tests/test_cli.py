@@ -41,9 +41,9 @@ def test_main_prints_scores(
     rc = main([str(scores), str(pdb)])
     assert rc == 0
     out = capsys.readouterr().out
-    assert "reactifPTM:" in out
-    assert "pairwise reactifPTM (directional)" in out
-    assert "pairwise reactifPTM (max of both directions)" in out
+    assert "reactifpTM:" in out
+    assert "pairwise reactifpTM (directional)" in out
+    assert "pairwise reactifpTM (max of both directions)" in out
     assert "A-B:" in out
     assert "B-A:" in out
 
