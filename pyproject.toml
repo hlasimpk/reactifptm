@@ -1,0 +1,85 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "reactifptm"
+version = "0.1.0"
+description = "A reimplementation of the actifPTM score for assessing AlphaFold-Multimer interface confidence."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Adam Simpkin", email = "adamsimpkin1@gmail.com" },
+]
+keywords = [
+    "alphafold",
+    "protein-structure",
+    "actifptm",
+    "iptm",
+    "structural-biology",
+    "predicted-aligned-error",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+dependencies = [
+    "numpy>=1.20",
+    "gemmi>=0.6",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.4",
+]
+
+[project.scripts]
+reactifptm = "reactifptm.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/adamsimpkin/reactifptm"
+Repository = "https://github.com/adamsimpkin/reactifptm"
+Issues = "https://github.com/adamsimpkin/reactifptm/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/reactifptm"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/reactifptm",
+    "tests",
+    "README.md",
+    "LICENSE",
+    "pyproject.toml",
+]
+exclude = [
+    "tests/data",
+    "**/__pycache__",
+    "**/*.pyc",
+]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+
+[tool.ruff]
+line-length = 100
+target-version = "py38"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E501"]
