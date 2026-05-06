@@ -48,12 +48,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     reactifptm = Reactifptm(args.input, args.structure, threshold=args.threshold)
     overall, pairwise = reactifptm.compute_reactifptm()
 
-    print(f"reactifPTM: {overall}")
-    print("\npairwise reactifPTM (directional):")
+    print(f"reactifpTM: {overall}")
+    print("\npairwise reactifpTM (directional):")
     for key, value in pairwise.items():
         print(f"  {key}: {value}")
 
-    print("\npairwise reactifPTM (max of both directions):")
+    print("\npairwise reactifpTM (max of both directions):")
     for key, value in reactifptm.reactifptm_pairwise_max.items():
         print(f"  {key}: {value}")
 
