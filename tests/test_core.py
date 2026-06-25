@@ -313,5 +313,5 @@ def test_align_pae_unreconcilable_raises() -> None:
     r = object.__new__(Reactifptm)
     pae = np.zeros((5, 5))  # 3 residues, 3 tokens, no metadata -> 5 unexplained
     plan = [(1, True, 0), (1, True, 0), (1, True, 0)]
-    with pytest.raises(ValueError, match="could not be determined"):
+    with pytest.raises(ValueError, match="no corresponding coordinates"):
         r._align_pae(pae, plan)
