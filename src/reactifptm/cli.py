@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from typing import Sequence
 
 from .core import Reactifptm
+
+logger = logging.getLogger(__name__)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -45,17 +48,22 @@ Example:
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
+    logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.INFO)
+
     try:
         reactifptm = Reactifptm(args.input, args.structure, threshold=args.threshold)
         overall, pairwise = reactifptm.compute_reactifptm()
     except ValueError as e:
-        print(f"Error: {e}", file=sys.stderr)
+        logger.error(e)
         return 1
 
     print(f"reactifpTM: {overall}")
     if overall == 0.0:
-        print(f"  Warning: no inter-chain atom pairs found within {args.threshold} Å. "
-              f"The chains may not be in contact at this threshold — try increasing it with -t.")
+        logger.warning(
+            "no inter-chain atom pairs found within %g Å. "
+            "The chains may not be in contact at this threshold — try increasing it with -t.",
+            args.threshold,
+        )
     print("\npairwise reactifpTM (directional):")
     for key, value in pairwise.items():
         print(f"  {key}: {value}")
