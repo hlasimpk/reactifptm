@@ -45,10 +45,17 @@ Example:
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
-    reactifptm = Reactifptm(args.input, args.structure, threshold=args.threshold)
-    overall, pairwise = reactifptm.compute_reactifptm()
+    try:
+        reactifptm = Reactifptm(args.input, args.structure, threshold=args.threshold)
+        overall, pairwise = reactifptm.compute_reactifptm()
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
 
     print(f"reactifpTM: {overall}")
+    if overall == 0.0:
+        print(f"  Warning: no inter-chain atom pairs found within {args.threshold} Å. "
+              f"The chains may not be in contact at this threshold — try increasing it with -t.")
     print("\npairwise reactifpTM (directional):")
     for key, value in pairwise.items():
         print(f"  {key}: {value}")
