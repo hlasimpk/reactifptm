@@ -1,5 +1,7 @@
 # reactifptm
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/hlasimpk/reactifptm/blob/main/notebooks/reactifptm.ipynb)
+
 A reimplementation of the **actifpTM** score for assessing AlphaFold-Multimer
 interface confidence.
 
@@ -7,6 +9,16 @@ actifpTM is a variant of ipTM that restricts the per-residue alignment score
 to **interface contacts** only — pairs of residues whose Cβ–Cβ distance falls
 under a contact threshold. This focuses the score on the residues that
 actually mediate the predicted interaction.
+
+See the [preprint](https://www.biorxiv.org/content/10.64898/2026.08.24.746624v1)
+for more details.
+
+## Try it in Colab
+
+No installation required — upload a PAE file and a structure (mmCIF/PDB) and
+run reactifpTM directly in your browser:
+
+[Open the reactifptm Colab notebook](https://colab.research.google.com/github/hlasimpk/reactifptm/blob/main/notebooks/reactifptm.ipynb)
 
 ## Installation
 
