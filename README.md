@@ -67,9 +67,9 @@ from reactifptm import Reactifptm
 r = Reactifptm("scores.json", "model.pdb")
 overall, pairwise = r.compute_reactifptm()
 
-print(overall)                       # global reactifpTM
-print(pairwise)                      # {"A-B": 0.951, "B-A": 0.940}
-print(r.reactifptm_pairwise_max)     # {"A-B": 0.951}
+print(overall)  # global reactifpTM
+print(pairwise)  # {"A-B": 0.951, "B-A": 0.940}
+print(r.reactifptm_pairwise_max)  # {"A-B": 0.951}
 
 r.save_results("results.json")
 ```
