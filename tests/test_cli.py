@@ -60,9 +60,9 @@ def test_main_writes_output_file(
     assert out.exists()
 
     written = json.loads(out.read_text())
-    assert "actifptm" in written
-    assert "pairwise_actifptm" in written
-    assert "pairwise_actifptm_max" in written
+    assert "reactifptm" in written
+    assert "pairwise_reactifptm" in written
+    assert "pairwise_reactifptm_max" in written
 
 
 def test_main_threshold_changes_score(

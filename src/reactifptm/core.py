@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import string
 from pathlib import Path
 from typing import Union
 
@@ -63,6 +62,8 @@ class Reactifptm:
         contact_map: Binary contact map based on Cb distances.
         asym_id: Integer array of chain assignments.
         chain_lengths: List of residue counts per chain.
+        chain_names: List of the input structure's own chain identifiers,
+            in the same order as ``chain_lengths``/``asym_id``.
         pae_matrix: Predicted aligned error matrix.
         reactifptm: Overall reactifPTM score for the complex.
         reactifptm_pairwise: Directional pairwise reactifPTM scores
@@ -79,7 +80,9 @@ class Reactifptm:
     def __init__(self, pae_file: PathLike, model_path: PathLike, threshold: float = 8.0):
         self.pae_matrix = self.parse_pae_file(pae_file)
         self.struct = gemmi.read_structure(str(model_path))
-        contact_map, asym_id, chain_lengths, token_plan = self.parse_input_model(threshold)
+        contact_map, asym_id, chain_lengths, chain_names, token_plan = self.parse_input_model(
+            threshold
+        )
 
         # Drop ligand/ion/water tokens from the PAE so it lines up with the
         # filtered (protein + nucleic-acid) contact map and chain assignments.
@@ -88,6 +91,7 @@ class Reactifptm:
         self.contact_map = contact_map
         self.asym_id = asym_id
         self.chain_lengths = chain_lengths
+        self.chain_names = chain_names
 
         self.reactifptm: float | None = None
         self.reactifptm_pairwise: dict[str, float] | None = None
@@ -185,6 +189,9 @@ class Reactifptm:
             contact_map: ``[N, N]`` binary contact map over kept residues.
             asym_id:     ``[N]`` integer array of chain assignments.
             chain_lengths: list of residue counts per chain.
+            chain_names: list of the input structure's own chain identifiers,
+                in the same order as ``chain_lengths`` (index ``i`` of
+                ``chain_names`` is the identifier for ``asym_id == i``).
             token_plan: list of ``(n_tokens, keep, frame_offset)`` per non-water
                 residue (structure order). ``n_tokens`` is 1 for standard
                 residues and the atom count otherwise; ``frame_offset`` is the
@@ -196,6 +203,7 @@ class Reactifptm:
         coords = []
         token_plan: list[tuple[int, bool, int]] = []
         chain_lengths: list[int] = []
+        chain_names: list[str] = []
         for chain in model:
             kind = chain_kinds[chain.name]
             residue_count = 0
@@ -219,6 +227,18 @@ class Reactifptm:
                 token_plan.append((n_tokens, keep, frame_offset))
             if residue_count > 0:
                 chain_lengths.append(residue_count)
+                # Preserve the structure's own chain identifier (rather than
+                # regenerating A, B, C, ... later) so pairwise output keys map
+                # unambiguously back to the input model. Guard against
+                # duplicate/blank IDs, which some file formats can produce,
+                # by disambiguating them here instead of silently colliding.
+                name = chain.name if chain.name else f"chain{len(chain_names)}"
+                if name in chain_names:
+                    suffix = 2
+                    while f"{name}_{suffix}" in chain_names:
+                        suffix += 1
+                    name = f"{name}_{suffix}"
+                chain_names.append(name)
 
         coords = np.array(coords)
         diff = coords[:, None, :] - coords[None, :, :]
@@ -226,7 +246,7 @@ class Reactifptm:
         contact_map = (distances < threshold).astype(float)
 
         asym_id = np.concatenate([np.full(length, i) for i, length in enumerate(chain_lengths)])
-        return contact_map, asym_id, chain_lengths, token_plan
+        return contact_map, asym_id, chain_lengths, chain_names, token_plan
 
     def _align_pae(self, pae: np.ndarray, token_plan: list[tuple[int, bool, int]]) -> np.ndarray:
         """Filter the PAE matrix down to one row/column per kept residue.
@@ -353,17 +373,19 @@ class Reactifptm:
             contacts=self.contact_map,
         )
 
-        chain_labels = list(string.ascii_uppercase)
         unique_chains = list(np.unique(self.asym_id))
-        pairwise: dict[str, float] = {}
-        for i, chain_i in enumerate(unique_chains):
-            for j, chain_j in enumerate(unique_chains):
+        # Directional scores keyed by the actual (chain_i, chain_j) id pair,
+        # not by string label, so downstream max-pairing can't be confused by
+        # a chain identifier that happens to contain a "-" itself.
+        pairwise_by_id: dict[tuple[int, int], float] = {}
+        for chain_i in unique_chains:
+            for chain_j in unique_chains:
                 if chain_i == chain_j:
                     continue
                 mask = (self.asym_id == chain_i) | (self.asym_id == chain_j)
                 (indices,) = np.where(mask)
                 idx = np.ix_(indices, indices)
-                # row_chain restricts the row max to chain_i so A-B and B-A
+                # row_chain restricts the row max to chain_i so i->j and j->i
                 # are asymmetric (best aligned residue from each side).
                 score = self._score(
                     tm_matrix[idx],
@@ -377,21 +399,30 @@ class Reactifptm:
                 # the output only lists chain pairs that actually interface.
                 if np.isnan(score):
                     continue
-                key = f"{chain_labels[i % 26]}-{chain_labels[j % 26]}"
-                pairwise[key] = round(float(score), 3)
+                pairwise_by_id[(int(chain_i), int(chain_j))] = round(float(score), 3)
 
-        # Per-unordered-pair max of both directions.
+        # Use the input structure's own chain identifiers (not a regenerated
+        # A, B, C, ... alphabet) so keys map back to the model unambiguously,
+        # including for >26 chains.
+        pairwise: dict[str, float] = {
+            f"{self.chain_names[i]}-{self.chain_names[j]}": value
+            for (i, j), value in pairwise_by_id.items()
+        }
+
+        # Per-unordered-pair max of both directions, worked out from the id
+        # pairs directly (rather than splitting the string keys, which would
+        # be ambiguous if a chain identifier itself contains a "-").
         pairwise_max: dict[str, float] = {}
-        seen: set[tuple[str, str]] = set()
-        for key, value in pairwise.items():
-            a, b = key.split("-")
-            unordered = tuple(sorted((a, b)))
+        seen: set[tuple[int, int]] = set()
+        for (i, j), value in pairwise_by_id.items():
+            unordered = tuple(sorted((i, j)))
             if unordered in seen:
                 continue
             seen.add(unordered)
-            other = pairwise.get(f"{b}-{a}", value)
+            other = pairwise_by_id.get((j, i), value)
             candidates = [v for v in (value, other) if not np.isnan(v)]
-            pairwise_max[f"{unordered[0]}-{unordered[1]}"] = (
+            label_a, label_b = self.chain_names[unordered[0]], self.chain_names[unordered[1]]
+            pairwise_max[f"{label_a}-{label_b}"] = (
                 round(max(candidates), 3) if candidates else float("nan")
             )
 
@@ -424,11 +455,11 @@ class Reactifptm:
         return float(per_row.max())
 
     def save_results(self, output_path: PathLike) -> None:
-        """Save actifPTM results to a JSON file."""
+        """Save reactifPTM results to a JSON file."""
         results = {
-            "actifptm": self.reactifptm,
-            "pairwise_actifptm": self.reactifptm_pairwise,
-            "pairwise_actifptm_max": self.reactifptm_pairwise_max,
+            "reactifptm": self.reactifptm,
+            "pairwise_reactifptm": self.reactifptm_pairwise,
+            "pairwise_reactifptm_max": self.reactifptm_pairwise_max,
         }
         with open(output_path, "w") as f:
             json.dump(results, f, indent=2)

@@ -155,6 +155,7 @@ def test_compute_omits_noncontacting_pairs() -> None:
     r = object.__new__(Reactifptm)
     r.pae_matrix = np.zeros((3, 3))
     r.asym_id = np.array([0, 1, 2])
+    r.chain_names = ["A", "B", "C"]
     # A-B touch; C is isolated from both.
     r.contact_map = np.array(
         [
@@ -192,10 +193,10 @@ def test_save_results_writes_valid_json(tmp_path: Path, sample_pair) -> None:
     assert out.exists()
 
     written = json.loads(out.read_text())
-    assert set(written.keys()) == {"actifptm", "pairwise_actifptm", "pairwise_actifptm_max"}
-    assert written["actifptm"] == r.reactifptm
-    assert written["pairwise_actifptm"] == r.reactifptm_pairwise
-    assert written["pairwise_actifptm_max"] == r.reactifptm_pairwise_max
+    assert set(written.keys()) == {"reactifptm", "pairwise_reactifptm", "pairwise_reactifptm_max"}
+    assert written["reactifptm"] == r.reactifptm
+    assert written["pairwise_reactifptm"] == r.reactifptm_pairwise
+    assert written["pairwise_reactifptm_max"] == r.reactifptm_pairwise_max
 
 
 # --- chain / residue classification (ligand & nucleic-acid prefiltering) --
@@ -315,3 +316,59 @@ def test_align_pae_unreconcilable_raises() -> None:
     plan = [(1, True, 0), (1, True, 0), (1, True, 0)]
     with pytest.raises(ValueError, match="no corresponding coordinates"):
         r._align_pae(pae, plan)
+
+
+# --- chain identifiers are preserved (not regenerated as A, B, C, ...) ----
+
+
+def _model_with_chains(chain_names: list[str]) -> gemmi.Structure:
+    """Build a minimal structure with one CA-bearing ALA per named chain.
+
+    Each chain's residue is placed at a distinct x-coordinate so every chain
+    pair is within the (default 8 A) contact threshold of its neighbours.
+    """
+    st = gemmi.Structure()
+    st.add_model(gemmi.Model("1"))
+    for i, name in enumerate(chain_names):
+        chain = _chain(name, [_residue("ALA", ["CA", "CB"])])
+        for residue in chain:
+            for atom in residue:
+                atom.pos = gemmi.Position(float(i), 0.0, 0.0)
+        st[0].add_chain(chain)
+    return st
+
+
+def test_parse_input_model_preserves_real_chain_names() -> None:
+    """Chain identifiers from the structure survive, not a regenerated alphabet."""
+    r = object.__new__(Reactifptm)
+    r.struct = _model_with_chains(["H", "L", "P1"])
+    _, asym_id, chain_lengths, chain_names, _ = r.parse_input_model()
+    assert chain_names == ["H", "L", "P1"]
+    assert chain_lengths == [1, 1, 1]
+    np.testing.assert_array_equal(asym_id, [0, 1, 2])
+
+
+def test_parse_input_model_disambiguates_duplicate_chain_names() -> None:
+    """Duplicate/blank chain IDs are made unique rather than silently colliding."""
+    r = object.__new__(Reactifptm)
+    r.struct = _model_with_chains(["A", "A", ""])
+    _, _, _, chain_names, _ = r.parse_input_model()
+    assert chain_names[0] == "A"
+    assert chain_names[1] != "A"  # disambiguated, e.g. "A_2"
+    assert len(set(chain_names)) == 3  # all unique
+
+
+def test_compute_reactifptm_pairwise_keys_use_real_chain_names() -> None:
+    """Pairwise output keys are the model's own chain IDs, e.g. 'H-L' not 'A-B'."""
+    r = Reactifptm.__new__(Reactifptm)
+    r.struct = _model_with_chains(["H", "L"])
+    contact_map, asym_id, chain_lengths, chain_names, token_plan = r.parse_input_model()
+    r.pae_matrix = r._align_pae(np.ones((2, 2)), token_plan)
+    r.contact_map = contact_map
+    r.asym_id = asym_id
+    r.chain_lengths = chain_lengths
+    r.chain_names = chain_names
+
+    _, pairwise = r.compute_reactifptm()
+    assert set(pairwise.keys()) == {"H-L", "L-H"}
+    assert set(r.reactifptm_pairwise_max.keys()) == {"H-L"}
