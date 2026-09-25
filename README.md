@@ -1,6 +1,7 @@
 # reactifptm
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/hlasimpk/reactifptm/blob/main/notebooks/reactifptm.ipynb)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22960229.svg)](https://doi.org/10.5281/zenodo.22960229)
 
 A reimplementation of the **actifpTM** score for assessing AlphaFold-Multimer
 interface confidence.
